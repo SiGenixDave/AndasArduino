@@ -1,0 +1,23 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 11.00
+# Visual Studio 2010
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "AndasCDC", "PiezoArduino.vcxproj", "{1D534BF1-3D36-41FC-B279-9D31FF8F1375}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Win32 = Debug|Win32
+		Release|Win32 = Release|Win32
+		Template|Win32 = Template|Win32
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{1D534BF1-3D36-41FC-B279-9D31FF8F1375}.Debug|Win32.ActiveCfg = Debug|Win32
+		{1D534BF1-3D36-41FC-B279-9D31FF8F1375}.Debug|Win32.Build.0 = Debug|Win32
+		{1D534BF1-3D36-41FC-B279-9D31FF8F1375}.Release|Win32.ActiveCfg = Release|Win32
+		{1D534BF1-3D36-41FC-B279-9D31FF8F1375}.Release|Win32.Build.0 = Release|Win32
+		{1D534BF1-3D36-41FC-B279-9D31FF8F1375}.Template|Win32.ActiveCfg = Template|Win32
+		{1D534BF1-3D36-41FC-B279-9D31FF8F1375}.Template|Win32.Build.0 = Template|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?><?xml-stylesheet type='text/xsl' href='_UpgradeReport_Files/UpgradeReport.xslt'?><UpgradeLog>
+<Properties><Property Name="Solution" Value="PiezoArduino">
+</Property><Property Name="Solution File" Value="C:\CustomerProjects\Andas\AdasCDC\PiezoArduino.sln">
+</Property><Property Name="Date" Value="Friday, March 11, 2016">
+</Property><Property Name="Time" Value="13:53:37 PM">
+</Property></Properties><Event ErrorLevel="0" Project="PiezoArduino" Source="PiezoArduino.vcproj" Description="Converting project file 'C:\CustomerProjects\Andas\AdasCDC\PiezoArduino.vcproj'.">
+</Event><Event ErrorLevel="1" Project="PiezoArduino" Source="PiezoArduino.vcproj" Description="VCWebServiceProxyGeneratorTool is no longer supported. The tool has been removed from your project settings.">
+</Event><Event ErrorLevel="0" Project="PiezoArduino" Source="PiezoArduino.vcproj" Description="Done converting to new project file 'C:\CustomerProjects\Andas\AdasCDC\PiezoArduino.vcxproj'.">
+</Event><Event ErrorLevel="3" Project="PiezoArduino" Source="PiezoArduino.vcproj" Description="Converted">
+</Event></UpgradeLog>
