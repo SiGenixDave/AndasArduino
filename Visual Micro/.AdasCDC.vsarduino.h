@@ -5,7 +5,7 @@
 	        all non-arduino files created by visual micro and all visual studio project or solution files can be freely deleted and are not required to compile a sketch (do not delete your own code!).
 	        note: debugger breakpoints are stored in '.sln' or '.asln' files, knowledge of last uploaded breakpoints is stored in the upload.vmps.xml file. Both files are required to continue a previous debug session without needing to compile and upload again
 	
-	Hardware: Arduino Uno, Platform=avr, Package=arduino
+	Hardware: Arduino Nano w/ ATmega328, Platform=avr, Package=arduino
 */
 
 #ifndef _VSARDUINO_H_
@@ -20,7 +20,7 @@
 #define __cplusplus
 #define GCC_VERSION 40801
 #define ARDUINO_ARCH_AVR
-#define ARDUINO_AVR_UNO
+#define ARDUINO_AVR_NANO
 #define __inline__
 #define __asm__(x)
 #define __extension__
@@ -83,14 +83,26 @@ extern "C" void __cxa_pure_virtual() {;}
 //
 //
 void SetupTimer2();
-Timer_t ElapsedTime(Timer_t aOldTime);
-void TimeStamp(void);
-void BlinkLED(void);
-void ProcessSerialInput(void);
-boolean ProcessLabviewInput(char *aBuffer);
+Timer_t ElapsedTime (Timer_t aOldTime);
+void TimeStamp (void);
+void BlinkLED (void);
+void ProcessSerialInput (void);
+boolean ProcessLabviewInput (char *aBuffer);
 uint16_t PopulateIds (char *labviewString);
 uint16_t PopulateIdsAndValues (char *labviewString);
 void SendChannels();
+void WriteParameters (void);
+void ReadParameters (void);
+void calibrate (byte direction);
+void calibrate();
+long readValue();
+void writeRegister (unsigned char r, unsigned char v);
+void writeInteger (unsigned char r, unsigned int v);
+unsigned char readRegister (unsigned char r);
+void readRegisters (unsigned char r, unsigned int numberOfBytes, unsigned char buffer[]);
+unsigned int readInteger (unsigned char r);
+unsigned long readLong (unsigned char r);
+void displayStatus();
 
 #include <AndasCDC.ino>
 #include <MyTypes.h>
