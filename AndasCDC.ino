@@ -23,6 +23,8 @@
 #define START_DELIMITER				'<'
 #define END_DELIMITER				'>'
 
+const uint16_t RD_BUFFER_SIZE		= 200;
+
 /*--------------------------------------------------------------------------
  MODULE MACROS
  --------------------------------------------------------------------------*/
@@ -43,6 +45,8 @@ static bool m_Sample;						// when true and m_cycling true, ADC sampling occurss
 static bool m_Blink;						// when true blinking occurss
 static uint16_t m_SampleTimeMsecs = 50;		// default sample time; can be changed by Windows app
 
+
+
 // This object is returned from function CreateResponse. It can't be 
 // an object placed on the stack (local variable) for that function; 
 // otherwise software becomes unstable or locks up
@@ -59,6 +63,8 @@ void setup()
 	pinMode(PIN_STATUS_LED, OUTPUT);
 	// setup serial port to intercept PC commands
 	Serial.begin(115200);
+
+	while (!Serial) {}
 
 	// Initialize timer 2 to fire every millisecond; cant use Timer 1 because it conflicts with the software
 	// serial library that is used to communicate with the display
@@ -217,8 +223,6 @@ void BlinkLED(void)
 ////////////////////////////////////////////////////////////////////////
 void ProcessSerialInput(void)
 {
-	const uint16_t RD_BUFFER_SIZE = 200;
-
 	static char serialBuffer[RD_BUFFER_SIZE];
 	static uint16_t bufIndex = 0;
 
@@ -258,42 +262,32 @@ boolean ProcessLabviewInput(char *aBuffer)
 	
 	boolean startDelimiterFound = false;
 	uint16_t idCount;
+	char numericString[RD_BUFFER_SIZE];
 
 	if(*aBuffer != START_DELIMITER)
 	{
 		return false;    // Don't do anything if start delimiter isn't the first character
 	}
 
+	char labviewCmd = aBuffer[1];
 
-	String labviewString = String(aBuffer);
-	
-	// verify string starts with "<" 
-	if (!labviewString.startsWith("<"))
-	{
-		return false;
-	}
+	// Remove the first 2 chars char
+	strcpy(numericString, &aBuffer[2]);
 
-	labviewString.replace("<","");
-	labviewString.replace(">","");
-
-	Serial.println(labviewString);
-
-
-	char labviewCmd = labviewString[0];
+	// Remove the last char
+	numericString[strlen(numericString) - 1] = 0;
 
 	Serial.print("labviewCmd = ");
 	Serial.println(labviewCmd);
 
-	// Strip off the Labview command
-	labviewString.remove(0,1);
-
-	Serial.println("labviewString = " + labviewString);
+	Serial.print("numericString = ");
+	Serial.println(numericString);
 
 	switch (labviewCmd)
 	{
 		case 's':
 		case 'S':
-			idCount = PopulateIds(labviewString);
+			idCount = PopulateIds(numericString);
 			// Populate m_Id[] so all channels are sent
 			if (idCount == 0)
 			{
@@ -305,7 +299,7 @@ boolean ProcessLabviewInput(char *aBuffer)
 
 		case 'w':
 		case 'W':
-			PopulateIdsAndValues(labviewString);
+			PopulateIdsAndValues(numericString);
 			// WriteParameters()
 			break;
 
@@ -324,7 +318,7 @@ boolean ProcessLabviewInput(char *aBuffer)
 
 
 
-uint16_t PopulateIds (String labviewString)
+uint16_t PopulateIds (char *labviewString)
 {
 
 	// Clear array info
@@ -334,22 +328,25 @@ uint16_t PopulateIds (String labviewString)
 		m_Value[i] = -1;
 	}
 
-	Serial.println("PopulateIds " + labviewString); 
-
-	if (labviewString == "")
+	if (strlen(labviewString) == 0)
 	{
 		Serial.println("No Ids");
 		return 0;
 	}
 
+	int16_t strLength = strlen(labviewString);
 	// Add a comma for consistent parsing
-	labviewString.concat(",");
-	Serial.println("labviewString.concat(,) = " + labviewString);
+	labviewString[strLength] = ',';
+	labviewString[strLength + 1] = 0;
+	Serial.print("labviewString.concat(,) = ");
+	Serial.println(labviewString);
+
+	strLength = strlen(labviewString);
 
 	// Count the number of commas, the number of commas + 1 is the amount of ids and/or values sent from labview
 	uint16_t index = 0; 
-	uint16_t strLength = labviewString.length();
 	uint16_t commaCount = 0;
+
 	while (index < strLength)
 	{
 		if (labviewString[index] == ',')
@@ -359,30 +356,41 @@ uint16_t PopulateIds (String labviewString)
 		index++;
 	}
 
-	uint16_t endCommaIndex = 0;
+	Serial.println("Comma Count = " + String(commaCount));
+
     uint16_t count = 0;
+	char *ptr = labviewString;
+	char val[20];
+
+	index = 0;
 	while (count < commaCount)
 	{
-		endCommaIndex = labviewString.indexOf(",");
-		// Convert all stringData to index and place in m_Id array
-		String val = labviewString.substring(0, endCommaIndex);
-		Serial.println("val = " + val);
+	    while (ptr[index] != ',')
+		{
+			index++;
+		}
 
-		m_Id[count] = val.toInt();
+		Serial.println("Index = " + String(index));
+		strncpy(val, ptr, index);
 
-		labviewString.remove(0, endCommaIndex + 1);
-		Serial.println(m_Id[count]);
+		Serial.println("Val = " + String(val));
+
+		m_Id[count] = strtol(val, NULL, 10);
+
+		Serial.println("m_Id[count] = " + String(m_Id[count]));
+
+		ptr = &ptr[index + 1];
+		index = 0;
+
 		count++;
 	}
-
 
 	return commaCount;
 
 }
 
-uint16_t PopulateIdsAndValues (String labviewString)
+uint16_t PopulateIdsAndValues (char *labviewString)
 {
-
 	// Clear array info
 	for (uint8_t i = 0; i < MAX_INS_FROM_LABVIEW; i++)
 	{
@@ -390,16 +398,25 @@ uint16_t PopulateIdsAndValues (String labviewString)
 		m_Value[i] = -1;
 	}
 
-	Serial.println("PopulateIdsAndValues " + labviewString); 
+	if (strlen(labviewString) == 0)
+	{
+		Serial.println("No Ids");
+		return 0;
+	}
 
+	int16_t strLength = strlen(labviewString);
 	// Add a comma for consistent parsing
-	labviewString.concat(",");
-	Serial.println("labviewString.concat(,) = " + labviewString);
+	labviewString[strLength] = ',';
+	labviewString[strLength + 1] = 0;
+	Serial.print("labviewString.concat(,) = ");
+	Serial.println(labviewString);
+
+	strLength = strlen(labviewString);
 
 	// Count the number of commas, the number of commas + 1 is the amount of ids and/or values sent from labview
 	uint16_t index = 0; 
-	uint16_t strLength = labviewString.length();
 	uint16_t commaCount = 0;
+
 	while (index < strLength)
 	{
 		if (labviewString[index] == ',')
@@ -409,29 +426,42 @@ uint16_t PopulateIdsAndValues (String labviewString)
 		index++;
 	}
 
-	uint16_t endCommaIndex = 0;
+	Serial.println("Comma Count = " + String(commaCount));
+
     uint16_t count = 0;
+	char *ptr = labviewString;
+	char val[20];
+
+	index = 0;
 	boolean updateId = true;
 	while (count < (commaCount / 2))
 	{
-		endCommaIndex = labviewString.indexOf(",");
-		// Convert all stringData to index and place in m_Id array
-		String val = labviewString.substring(0, endCommaIndex);
-		Serial.println("val = " + val);
+	    while (ptr[index] != ',')
+		{
+			index++;
+		}
+
+		Serial.println("Index = " + String(index));
+		strncpy(val, ptr, index);
+
+		Serial.println("Val = " + String(val));
 
 		if (updateId == true)
 		{
-			m_Id[count] = val.toInt();
+			m_Id[count] = strtol(val, NULL, 10);
+			Serial.println("m_Id[count] = " + String(m_Id[count]));
 			updateId = false;
 		}
 		else
 		{
-			m_Value[count] = val.toInt();
+			m_Value[count] = strtol(val, NULL, 10);
+			Serial.println("m_Value[count] = " + String(m_Value[count]));
 			updateId = true;
 			count++;
 		}
 
-		labviewString.remove(0, endCommaIndex + 1);
+		ptr = &ptr[index + 1];
+		index = 0;
 	}
 
 	return commaCount / 2;
