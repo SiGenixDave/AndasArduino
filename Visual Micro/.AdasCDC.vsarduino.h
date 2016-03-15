@@ -84,7 +84,6 @@ extern "C" void __cxa_pure_virtual() {;}
 //
 void SetupTimer2();
 Timer_t ElapsedTime(Timer_t aOldTime);
-void ServiceBlinkingObjects(void);
 void TimeStamp(void);
 void BlinkLED(void);
 void ProcessSerialInput(void);
@@ -92,9 +91,6 @@ boolean ProcessLabviewInput(char *aBuffer);
 uint16_t PopulateIds (char *labviewString);
 uint16_t PopulateIdsAndValues (char *labviewString);
 void SendChannels();
-void SendResponse();
-String CreateResponse(uint16_t aId);
-uint16_t Convert3DigitASCIIToValue(char *aBuffer);
 
 #include <AndasCDC.ino>
 #include <MyTypes.h>

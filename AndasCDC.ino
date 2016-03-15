@@ -24,6 +24,7 @@
 #define END_DELIMITER				'>'
 
 const uint16_t RD_BUFFER_SIZE		= 200;
+const uint16_t WR_BUFFER_SIZE		= 200;
 
 /*--------------------------------------------------------------------------
  MODULE MACROS
@@ -37,7 +38,6 @@ const uint16_t RD_BUFFER_SIZE		= 200;
  MODULE VARIABLES
  --------------------------------------------------------------------------*/
 
-static bool m_Cycling;					// when true and m_Sample true, ADC sampling occurs
 static Timer_t m_TimerISRCnt;			// Timer tick count
 static volatile uint32_t m_TimerCounter;			// Reported back to UI;
 
@@ -45,12 +45,6 @@ static bool m_Sample;						// when true and m_cycling true, ADC sampling occurss
 static bool m_Blink;						// when true blinking occurss
 static uint16_t m_SampleTimeMsecs = 50;		// default sample time; can be changed by Windows app
 
-
-
-// This object is returned from function CreateResponse. It can't be 
-// an object placed on the stack (local variable) for that function; 
-// otherwise software becomes unstable or locks up
-static String m_Response = String();
 
 /*--------------------------------------------------------------------------
  MODULE PROTOTYPES
@@ -77,16 +71,7 @@ void setup()
 // the loop routine runs over and over again forever:
 void loop() 
 {
-
 	TimeStamp();
-	if (m_Sample)			// becomes true when sample time expired
-	{
-		m_Sample = false;
-		if (m_Cycling)		// controlled by Windows app
-		{
-			SendResponse();	// only send response when Windows App connected
-		}
-	}
 	ProcessSerialInput();
 }
 
@@ -147,23 +132,6 @@ Timer_t ElapsedTime(Timer_t aOldTime)
 		calcTime = currentTicks - aOldTime;
 	}
 	return (calcTime);
-}
-
-
-////////////////////////////////////////////////////////////////////////
-//
-// Used to service any objects that require blinking
-//
-////////////////////////////////////////////////////////////////////////
-void ServiceBlinkingObjects(void)
-{
-	static bool blinkSync = false;	// toggles every call when m_Blink == true
-
-	if (m_Blink == true)			// becomes true when blink cycle time expired
-	{
-		m_Blink = false;			// reset the flag
-		blinkSync = !blinkSync;		// Toggle the state
-	}
 }
 
 
@@ -244,7 +212,6 @@ void ProcessSerialInput(void)
 				bufIndex = 0;  
 			}
 		}
-
 	}
 }
 
@@ -277,12 +244,6 @@ boolean ProcessLabviewInput(char *aBuffer)
 	// Remove the last char
 	numericString[strlen(numericString) - 1] = 0;
 
-	Serial.print("labviewCmd = ");
-	Serial.println(labviewCmd);
-
-	Serial.print("numericString = ");
-	Serial.println(numericString);
-
 	switch (labviewCmd)
 	{
 		case 's':
@@ -291,7 +252,6 @@ boolean ProcessLabviewInput(char *aBuffer)
 			// Populate m_Id[] so all channels are sent
 			if (idCount == 0)
 			{
-				Serial.println("idcount = 0");
 				m_Id[0] = 0; m_Id[1] = 1; m_Id[2] = 2; m_Id[3] = 3;
 			}
 			SendChannels(); 
@@ -330,7 +290,6 @@ uint16_t PopulateIds (char *labviewString)
 
 	if (strlen(labviewString) == 0)
 	{
-		Serial.println("No Ids");
 		return 0;
 	}
 
@@ -338,8 +297,6 @@ uint16_t PopulateIds (char *labviewString)
 	// Add a comma for consistent parsing
 	labviewString[strLength] = ',';
 	labviewString[strLength + 1] = 0;
-	Serial.print("labviewString.concat(,) = ");
-	Serial.println(labviewString);
 
 	strLength = strlen(labviewString);
 
@@ -356,8 +313,6 @@ uint16_t PopulateIds (char *labviewString)
 		index++;
 	}
 
-	Serial.println("Comma Count = " + String(commaCount));
-
     uint16_t count = 0;
 	char *ptr = labviewString;
 	char val[20];
@@ -370,14 +325,9 @@ uint16_t PopulateIds (char *labviewString)
 			index++;
 		}
 
-		Serial.println("Index = " + String(index));
 		strncpy(val, ptr, index);
 
-		Serial.println("Val = " + String(val));
-
 		m_Id[count] = strtol(val, NULL, 10);
-
-		Serial.println("m_Id[count] = " + String(m_Id[count]));
 
 		ptr = &ptr[index + 1];
 		index = 0;
@@ -400,7 +350,6 @@ uint16_t PopulateIdsAndValues (char *labviewString)
 
 	if (strlen(labviewString) == 0)
 	{
-		Serial.println("No Ids");
 		return 0;
 	}
 
@@ -408,8 +357,6 @@ uint16_t PopulateIdsAndValues (char *labviewString)
 	// Add a comma for consistent parsing
 	labviewString[strLength] = ',';
 	labviewString[strLength + 1] = 0;
-	Serial.print("labviewString.concat(,) = ");
-	Serial.println(labviewString);
 
 	strLength = strlen(labviewString);
 
@@ -426,8 +373,6 @@ uint16_t PopulateIdsAndValues (char *labviewString)
 		index++;
 	}
 
-	Serial.println("Comma Count = " + String(commaCount));
-
     uint16_t count = 0;
 	char *ptr = labviewString;
 	char val[20];
@@ -441,21 +386,16 @@ uint16_t PopulateIdsAndValues (char *labviewString)
 			index++;
 		}
 
-		Serial.println("Index = " + String(index));
 		strncpy(val, ptr, index);
-
-		Serial.println("Val = " + String(val));
 
 		if (updateId == true)
 		{
 			m_Id[count] = strtol(val, NULL, 10);
-			Serial.println("m_Id[count] = " + String(m_Id[count]));
 			updateId = false;
 		}
 		else
 		{
 			m_Value[count] = strtol(val, NULL, 10);
-			Serial.println("m_Value[count] = " + String(m_Value[count]));
 			updateId = true;
 			count++;
 		}
@@ -472,71 +412,23 @@ uint16_t PopulateIdsAndValues (char *labviewString)
 uint16_t tempData[4] = {0 , 12, 345, 6789}; 
 void SendChannels()
 {
-	Serial.println("SendChannels()");
-	String outStr = "<s";
+	char outStr[WR_BUFFER_SIZE] = {NULL};
+	strcat (outStr, "<s");
 	uint16_t index = 0;
 	while (m_Id[index] != -1)
 	{
-		String intStr = String(tempData[m_Id[index]]);
-		outStr.concat(intStr);
-		outStr.concat(",");
+		char intStr[10];
+		sprintf(intStr,"%d,",tempData[m_Id[index]]);
+		strcat (outStr, intStr);
 		index++;
 	}
 	// strip the final ","
-	outStr[outStr.length() - 1] = NULL; 
+	outStr[strlen(outStr) - 1] = NULL; 
 
-	outStr.concat(">");
+	strcat (outStr, ">");
 	Serial.print(outStr);	
 
 }
 
-////////////////////////////////////////////////////////////////////////
-//
-//  Compiles and transmits all sampled data back to the UI
-//
-////////////////////////////////////////////////////////////////////////
-void SendResponse()
-{
-	String response = String();
-	// append sensor values 
-	response += CreateResponse(0);
-	response += CreateResponse(1);
-	Serial.print(response);             // send data to UI 
-}
-
-
-////////////////////////////////////////////////////////////////////////
-//
-//  Creates a response in the UI expected format with ID followed
-//  by sampled ADC value followed by timestamp
-//
-////////////////////////////////////////////////////////////////////////
-String CreateResponse(uint16_t aId)
-{
-	uint16_t id = aId + 1;			// needed here to avoid any potential 
-									// operator overload issue with the "+"
-									// See Arduino String class issues
-
-	m_Response = "";
-
-	//send sensorValue back to UI
-	m_Response += START_DELIMITER;    // Start delimeter
-	m_Response += 'S';                // Indicate sensor data
-	m_Response += id;				  // add 1 to the ID 
-	m_Response += ":";                 // isolate data from command
-	m_Response += END_DELIMITER;      // end delimiter
-
-	return m_Response;
-}
-
-////////////////////////////////////////////////////////////////////////
-//
-//  Converts a 3 digit decimal ASCII string from ASCII to a value
-//
-////////////////////////////////////////////////////////////////////////
-uint16_t Convert3DigitASCIIToValue(char *aBuffer)
-{
-	return ((aBuffer[0] - '0') * 100) + ((aBuffer[1] - '0') * 10) + (aBuffer[2] - '0');
-}
 
 
