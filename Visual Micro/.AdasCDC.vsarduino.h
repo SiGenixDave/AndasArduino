@@ -82,6 +82,8 @@ extern "C" void __cxa_pure_virtual() {;}
 
 //
 //
+void SelectCDC (unsigned char cdc);
+void ReadCapValues (void);
 void SetupTimer2();
 Timer_t ElapsedTime (Timer_t aOldTime);
 void TimeStamp (void);
@@ -93,6 +95,7 @@ uint16_t PopulateIdsAndValues (char *labviewString);
 void SendChannels();
 void WriteParameters (void);
 void ReadParameters (void);
+unsigned char SwitchCDC (unsigned char regId);
 void calibrate (byte direction);
 void calibrate();
 long readValue();

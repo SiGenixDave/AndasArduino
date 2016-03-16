@@ -22,9 +22,9 @@ const uint16_t RD_BUFFER_SIZE		= 200;
 const uint16_t WR_BUFFER_SIZE		= 200;
 
 #define I2C_PCA9543A_ADDR           0x70  // (0xE0 >> 1)
-#define CDC_1						0x01
-#define CDC_2						0x02
-#define CDC_BOTH					0x03
+#define CDC_1						0x01  // select CDC 1 (to perform register reads)
+#define CDC_2						0x02  // select CDC 2 (to perform register reads)
+#define CDC_BOTH					0x03  // select both CDCs (identical writes to both)
 
 #define I2C_AD7746_ADDR				0x48  // (0x90 >> 1)
 #define REGISTER_STATUS				0x00
@@ -106,8 +106,10 @@ void setup()
     // wait for reboot
     delay (1);
 
-    //writeRegister (REGISTER_EXC_SETUP, _BV (5) | _BV (1) | _BV (0)); // EXC source B
-    //writeRegister (REGISTER_CAP_SETUP, _BV (7)); // cap setup reg - cap enabled
+
+#if 0
+    writeRegister (REGISTER_EXC_SETUP, _BV (5) | _BV (1) | _BV (0)); // EXC source B
+    writeRegister (REGISTER_CAP_SETUP, _BV (7)); // cap setup reg - cap enabled
 
     Serial.println ("Getting offset");
     offset = ((unsigned long)readInteger (REGISTER_CAP_OFFSET)) << 8;
@@ -115,13 +117,12 @@ void setup()
     Serial.println (offset);
 
     // set configuration to calib. mode, slow sample
-    //writeRegister (0x0A, _BV (7) | _BV (6) | _BV (5) | _BV (4) | _BV (3) | _BV (2) | _BV (0));
+    writeRegister (0x0A, _BV (7) | _BV (6) | _BV (5) | _BV (4) | _BV (3) | _BV (2) | _BV (0));
 
     // wait for calibration
     delay (10);
 
-#if 0
-    displayStatus();
+	displayStatus();
 
     Serial.print ("Calibrated offset: ");
     offset = ((unsigned long)readInteger (REGISTER_CAP_OFFSET)) << 8;
@@ -139,12 +140,16 @@ void setup()
 #endif
 }
 
+
+
 // the loop routine runs over and over again forever:
 void loop()
 {
     TimeStamp();
     ProcessSerialInput();
-
+	///delay(250);
+	ReadCapValues();
+	
 #if 0
   long value = readValue();
   Serial.print(offset);
@@ -167,6 +172,54 @@ void loop()
 
   delay(500);
 #endif
+}
+
+void SelectCDC (unsigned char cdc)
+{
+#if 0
+    Wire.beginTransmission (I2C_PCA9543A_ADDR);	// start i2c cycle
+    Wire.write (cdc);						    // allow writes to go to one or both CDCs
+    Wire.endTransmission();						// ends i2c cycle
+#endif
+}
+
+uint32_t capValue[4];
+void ReadCapValues (void)
+{
+    SelectCDC (CDC_BOTH);
+
+	// Setup config registers for channel 2 on both CDCs
+	writeRegister (0x0b, 0xb8);
+	writeRegister (0x07, 0xc0);
+	writeRegister (0x09, 0x23);
+	writeRegister (0x0A, 0x21);
+	delay (100);
+
+    SelectCDC (CDC_1);						    
+	capValue[0] = readValue();
+
+    SelectCDC (CDC_2);						    
+	capValue[2] = readValue();
+
+	//////////////////////////////////////////////////////////////////////////////
+	//////////////////////////////////////////////////////////////////////////////
+	//////////////////////////////////////////////////////////////////////////////
+    SelectCDC (CDC_BOTH);
+
+	// Setup config registers for channel 1 on both CDCs
+	writeRegister (0x0b, 0xb8);
+	writeRegister (0x07, 0x80);
+	writeRegister (0x09, 0x0b);
+	writeRegister (0x0A, 0x21);
+	delay (100);
+
+    SelectCDC (CDC_1);						    
+	capValue[1] = readValue();
+
+    SelectCDC (CDC_2);						    
+	capValue[3] = readValue();
+
+	
 }
 
 
@@ -509,18 +562,17 @@ uint16_t PopulateIdsAndValues (char *labviewString)
 }
 
 
-uint32_t tempData[4] = {0 , 12, 345, 6789999};
 void SendChannels()
 {
     char outStr[WR_BUFFER_SIZE] = {NULL};
     // Add start of channel send
-    strcat (outStr, "<s");
+    strcat (outStr, "<s,");
     uint16_t index = 0;
     while (m_Id[index] != -1)
     {
         char intStr[10];
         // Replace tempData with real data (tempData used for test)
-        sprintf (intStr, "%ld,", tempData[m_Id[index]]);
+        sprintf (intStr, "%ld,", capValue[m_Id[index]]);
         strcat (outStr, intStr);
         index++;
     }
@@ -537,53 +589,76 @@ void WriteParameters (void)
 {
     char response[100] = {NULL};;
 
-#if 0
-    // Always update both CDCs with the same info
-    // Set Switch to allow the I2C bus to go to both CDC's
-    Wire.beginTransmission (I2C_PCA9543A_ADDR);	// start i2c cycle
-    Wire.write (CDC_BOTH);						// allow writes to go to both CDCs
-    Wire.endTransmission();						// ends i2c cycle
-#endif
+    SelectCDC (CDC_BOTH);						// allow writes to go to both CDCs
 
     uint16_t index = 0;
+	strcpy(response, "<w");
     while (m_Id[index] != -1)
     {
-		Serial.println(m_Id[index]);
-		Serial.println(m_Value[index]);
+		char val[20];
+		sprintf(val, "%d,", m_Id[index]);
+		strcat(response, val);
         writeRegister (m_Id[index], m_Value[index]);
         index++;
     }
+
+    // strip the final ","
+    response[strlen (response) - 1] = NULL;
+	strcat(response, ">");
+
+	Serial.print(response);
 
 }
 
 void ReadParameters (void)
 {
 
-	char response[20];
+	char response[100];
 
-#if 0
-    // Always update both CDCs with the same info
-    // Set Switch to allow the I2C bus to go to both CDC's
-    Wire.beginTransmission (I2C_PCA9543A_ADDR);	// start i2c cycle
-    Wire.write (CDC_BOTH);						// allow writes to go to both CDCs
-    Wire.endTransmission();						// ends i2c cycle
-#endif
+    SelectCDC (CDC_BOTH);						// allow writes to go to both CDCs
+
 	strcpy (response, "<r");
 
     uint16_t index = 0;
     while (m_Id[index] != -1)
     {
 		char ascii[10];
-        unsigned char val = readRegister ((unsigned char)m_Id[index]);
+		unsigned char cdcReg = SwitchCDC ((unsigned char)m_Id[index]);
+        unsigned char val = readRegister (cdcReg);
 		sprintf(ascii, "%d,", val);
 		strcat(response, ascii);
         index++;
     }
+    // strip the final ","
+    response[strlen (response) - 1] = NULL;
+
 	strcat(response, ">");
 	Serial.print(response);
 
 }
 
+unsigned char SwitchCDC (unsigned char regId)
+{
+	if (regId > 100)
+	{
+		regId -= 100;
+
+	    // Set Switch to allow the I2C bus to go to both CDC's
+		Wire.beginTransmission (I2C_PCA9543A_ADDR);	// start i2c cycle
+		Wire.write (CDC_2);							// allow writes to go to CDC 1
+		Wire.endTransmission();						// ends i2c cycle
+	}
+	else
+	{
+	    // Set Switch to allow the I2C bus to go to both CDC's
+		Wire.beginTransmission (I2C_PCA9543A_ADDR);	// start i2c cycle
+		Wire.write (CDC_1);							// allow writes to go to CDC 1
+		Wire.endTransmission();						// ends i2c cycle
+	}
+
+	return regId;
+
+}
 
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -674,7 +749,7 @@ void readRegisters (unsigned char r, unsigned int numberOfBytes, unsigned char b
     unsigned char v;
     Wire.beginTransmission (I2C_AD7746_ADDR);
     Wire.write (r); // register to read
-    Wire.endTransmission();
+    Wire.endTransmission(false);
 
     Wire.requestFrom (I2C_AD7746_ADDR, numberOfBytes); // read a byte
     char i = 0;
@@ -760,6 +835,7 @@ unsigned long readLong (unsigned char r)
 
 }
 
+#if 0
 void displayStatus()
 {
     unsigned char data[18];
@@ -808,6 +884,5 @@ void displayStatus()
 
 }
 
-
-
+#endif
 
