@@ -2,8 +2,10 @@
  INCLUDE FILES
  --------------------------------------------------------------------------*/
 #include <stdio.h>
-#include "MyTypes.h"
 #include <Wire.h>
+
+#define Timer_t                     uint32_t
+#define	MAX_TIMER_VALUE				0xFFFFFFFF
 
 /*--------------------------------------------------------------------------
  MODULE CONSTANTS
@@ -59,7 +61,7 @@ const uint16_t WR_BUFFER_SIZE		= 200;
  MODULE VARIABLES
  --------------------------------------------------------------------------*/
 
-static Timer_t m_TimerISRCnt;			// Timer tick count
+static uint32_t m_TimerISRCnt;			// Timer tick count
 static volatile uint32_t m_TimerCounter;			// Reported back to UI;
 
 static bool m_Sample;						// when true and m_cycling true, ADC sampling occurs
@@ -92,17 +94,27 @@ void setup()
 
     Wire.begin();
 
-#if 0
+#if 1
     // Set Switch to allow the I2C bus to go to both CDC's
     Wire.beginTransmission (I2C_PCA9543A_ADDR);	// start i2c cycle
-    Wire.write (CDC_BOTH);						// allow writes to go to both CDCs
+    Wire.write (CDC_1);						// allow writes to go to both CDCs
     Wire.endTransmission();						// ends i2c cycle
 #endif
 
-    Wire.beginTransmission (I2C_AD7746_ADDR);	// start i2c cycle
+#if 0
+    unsigned char v;
+	Wire.requestFrom(I2C_PCA9543A_ADDR, 1, true);    // request 1 bytes from slave device
+	v = Wire.read(); // receive a byte as character
+	Serial.println(v);         // print the character
+#endif
+	
+	delay (500);
+
+#if 0
+    Wire.beginTransmission (I2C_AD7746_ADDR);	  // start i2c cycle
     Wire.write (RESET_ADDRESS);					// reset the CDCs
     Wire.endTransmission();						// ends i2c cycle
-
+#endif
     // wait for reboot
     delay (1);
 
@@ -147,8 +159,7 @@ void loop()
 {
     TimeStamp();
     ProcessSerialInput();
-	///delay(250);
-	ReadCapValues();
+	//ReadCapValues();
 	
 #if 0
   long value = readValue();
@@ -191,7 +202,7 @@ void ReadCapValues (void)
 	// Setup config registers for channel 2 on both CDCs
 	writeRegister (0x0b, 0xb8);
 	writeRegister (0x07, 0xc0);
-	writeRegister (0x09, 0x23);
+	writeRegister (0x09, 0x1b);
 	writeRegister (0x0A, 0x21);
 	delay (100);
 
@@ -209,7 +220,7 @@ void ReadCapValues (void)
 	// Setup config registers for channel 1 on both CDCs
 	writeRegister (0x0b, 0xb8);
 	writeRegister (0x07, 0x80);
-	writeRegister (0x09, 0x0b);
+	writeRegister (0x09, 0x1b);
 	writeRegister (0x0A, 0x21);
 	delay (100);
 
