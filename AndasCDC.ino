@@ -2,10 +2,8 @@
  INCLUDE FILES
  --------------------------------------------------------------------------*/
 #include <stdio.h>
+#include "MyTypes.h"
 #include <Wire.h>
-
-#define Timer_t                     uint32_t
-#define	MAX_TIMER_VALUE				0xFFFFFFFF
 
 /*--------------------------------------------------------------------------
  MODULE CONSTANTS
@@ -61,7 +59,7 @@ const uint16_t WR_BUFFER_SIZE		= 200;
  MODULE VARIABLES
  --------------------------------------------------------------------------*/
 
-static uint32_t m_TimerISRCnt;			// Timer tick count
+static Timer_t m_TimerISRCnt;			// Timer tick count
 static volatile uint32_t m_TimerCounter;			// Reported back to UI;
 
 static bool m_Sample;						// when true and m_cycling true, ADC sampling occurs
@@ -71,6 +69,7 @@ static uint16_t m_SampleTimeMsecs = 50;		// default sample time; can be changed 
 byte calibration;
 byte outOfRangeCount = 0;
 unsigned long offset = 0;
+uint32_t capValue[4];
 /*--------------------------------------------------------------------------
  MODULE PROTOTYPES
  --------------------------------------------------------------------------*/
@@ -78,6 +77,9 @@ unsigned long offset = 0;
 // the setup routine runs once when power is applied or reset is  pressed
 void setup()
 {
+    char stat = 0;
+    char capdac_a = 0;
+    
     // initialize the digital pin as an output.
     pinMode (PIN_STATUS_LED, OUTPUT);
     // setup serial port to intercept PC commands
@@ -94,40 +96,41 @@ void setup()
 
     Wire.begin();
 
-#if 1
     // Set Switch to allow the I2C bus to go to both CDC's
-    Wire.beginTransmission (I2C_PCA9543A_ADDR);	// start i2c cycle
-    Wire.write (CDC_1);						// allow writes to go to both CDCs
-    Wire.endTransmission();						// ends i2c cycle
-#endif
+    SelectCDC(CDC_BOTH);
 
-#if 0
-    unsigned char v;
-	Wire.requestFrom(I2C_PCA9543A_ADDR, 1, true);    // request 1 bytes from slave device
-	v = Wire.read(); // receive a byte as character
-	Serial.println(v);         // print the character
-#endif
-	
-	delay (500);
-
-#if 0
-    Wire.beginTransmission (I2C_AD7746_ADDR);	  // start i2c cycle
+    // Reset both CDC's
+    Wire.beginTransmission (I2C_AD7746_ADDR);	// start i2c cycle
     Wire.write (RESET_ADDRESS);					// reset the CDCs
     Wire.endTransmission();						// ends i2c cycle
-#endif
+
     // wait for reboot
     delay (1);
 
+    writeRegister (REGISTER_EXC_SETUP, 0x18); // EXC source A+B; VDD/8 excitation voltage
+    writeRegister (REGISTER_CAP_SETUP, 0x80); // cap setup reg - cap enabled
+    writeRegister (REGISTER_CONFIGURATION, 0x20); // configuration register - 62ms update rate
+    // **TRS 3-17 write to CAPDAC register using formula from sheet 3 of app note CN-1029
+    writeRegister (REGISTER_CAP_DAC_A, 0x51); // CAPDAC_A - TEST    
+
+    // Set Switch to connect the I2C bus to CDC 1
+    SelectCDC(CDC_1);
+
+    Serial.println ("\nCDC #1");
+    Serial.println ("---------------");
+    
+    displayStatus();  // register dump
+    
+    // Set Switch to connect the I2C bus to CDC 2
+    SelectCDC(CDC_2);
+
+    Serial.println ("\nCDC #2");
+    Serial.println ("---------------");
+    
+    displayStatus();  // register dump
+
 
 #if 0
-    writeRegister (REGISTER_EXC_SETUP, _BV (5) | _BV (1) | _BV (0)); // EXC source B
-    writeRegister (REGISTER_CAP_SETUP, _BV (7)); // cap setup reg - cap enabled
-
-    Serial.println ("Getting offset");
-    offset = ((unsigned long)readInteger (REGISTER_CAP_OFFSET)) << 8;
-    Serial.print ("Factory offset: ");
-    Serial.println (offset);
-
     // set configuration to calib. mode, slow sample
     writeRegister (0x0A, _BV (7) | _BV (6) | _BV (5) | _BV (4) | _BV (3) | _BV (2) | _BV (0));
 
@@ -140,16 +143,17 @@ void setup()
     offset = ((unsigned long)readInteger (REGISTER_CAP_OFFSET)) << 8;
     Serial.println (offset);
 
-
+#endif
+#if 0
     writeRegister (REGISTER_CAP_SETUP, _BV (7)); // cap setup reg - cap enabled
     writeRegister (REGISTER_EXC_SETUP, _BV (3)); // EXC source A
     writeRegister (REGISTER_CONFIGURATION, _BV (7) | _BV (6) | _BV (5) | _BV (4) | _BV (3) | _BV (0)); // continuous mode
 
     displayStatus();
     calibrate();
-
-    Serial.println ("done");
 #endif
+
+    Serial.println ("\ndone");
 }
 
 
@@ -159,7 +163,17 @@ void loop()
 {
     TimeStamp();
     ProcessSerialInput();
-	//ReadCapValues();
+	///delay(250);
+	ReadCapValues();
+    Serial.print ("\nCAPVALS: ");
+    Serial.print (capValue[0]);
+    Serial.print (", ");
+    Serial.print (capValue[1]);
+    Serial.print (", ");
+    Serial.print (capValue[2]);
+    Serial.print (", ");
+    Serial.println (capValue[3]);
+    delay(1000);    // wait 1 second
 	
 #if 0
   long value = readValue();
@@ -187,22 +201,21 @@ void loop()
 
 void SelectCDC (unsigned char cdc)
 {
-#if 0
     Wire.beginTransmission (I2C_PCA9543A_ADDR);	// start i2c cycle
     Wire.write (cdc);						    // allow writes to go to one or both CDCs
     Wire.endTransmission();						// ends i2c cycle
-#endif
+    Wire.endTransmission();						// **TRS 3-17 second stop condition
 }
 
-uint32_t capValue[4];
+//uint32_t capValue[4];
 void ReadCapValues (void)
 {
     SelectCDC (CDC_BOTH);
 
 	// Setup config registers for channel 2 on both CDCs
-	writeRegister (0x0b, 0xb8);
+//	writeRegister (0x0b, 0xb8);
 	writeRegister (0x07, 0xc0);
-	writeRegister (0x09, 0x1b);
+//	writeRegister (0x09, 0x23);
 	writeRegister (0x0A, 0x21);
 	delay (100);
 
@@ -218,9 +231,9 @@ void ReadCapValues (void)
     SelectCDC (CDC_BOTH);
 
 	// Setup config registers for channel 1 on both CDCs
-	writeRegister (0x0b, 0xb8);
+//	writeRegister (0x0b, 0xb8);
 	writeRegister (0x07, 0x80);
-	writeRegister (0x09, 0x1b);
+//	writeRegister (0x09, 0x0b);
 	writeRegister (0x0A, 0x21);
 	delay (100);
 
@@ -666,6 +679,7 @@ unsigned char SwitchCDC (unsigned char regId)
 		Wire.write (CDC_1);							// allow writes to go to CDC 1
 		Wire.endTransmission();						// ends i2c cycle
 	}
+	Wire.endTransmission();						// **TRS 3-17 add second stop condition
 
 	return regId;
 
@@ -846,54 +860,65 @@ unsigned long readLong (unsigned char r)
 
 }
 
-#if 0
 void displayStatus()
 {
     unsigned char data[18];
 
     readRegisters (0, 18, data);
 
-    Serial.println ("\nAD7746 Registers:");
-    Serial.print ("Status (0x0): ");
-    Serial.println (data[0], BIN);
-    Serial.print ("Cap Data (0x1-0x3): ");
-    Serial.print (data[1], BIN);
-    Serial.print (".");
-    Serial.print (data[2], BIN);
-    Serial.print (".");
-    Serial.println (data[3], BIN);
-    Serial.print ("VT Data (0x4-0x6): ");
-    Serial.print (data[4], BIN);
-    Serial.print (".");
-    Serial.print (data[5], BIN);
-    Serial.print (".");
-    Serial.println (data[6], BIN);
-    Serial.print ("Cap Setup (0x7): ");
-    Serial.println (data[7], BIN);
-    Serial.print ("VT Setup (0x8): ");
-    Serial.println (data[8], BIN);
-    Serial.print ("EXC Setup (0x9): ");
-    Serial.println (data[9], BIN);
-    Serial.print ("Configuration (0xa): ");
-    Serial.println (data[10], BIN);
-    Serial.print ("Cap Dac A (0xb): ");
-    Serial.println (data[11], BIN);
-    Serial.print ("Cap Dac B (0xc): ");
-    Serial.println (data[12], BIN);
-    Serial.print ("Cap Offset (0xd-0xe): ");
-    Serial.print (data[13], BIN);
-    Serial.print (".");
-    Serial.println (data[14], BIN);
-    Serial.print ("Cap Gain (0xf-0x10): ");
-    Serial.print (data[15], BIN);
-    Serial.print (".");
-    Serial.println (data[16], BIN);
-    Serial.print ("Volt Gain (0x11-0x12): ");
-    Serial.print (data[17], BIN);
-    Serial.print (".");
-    Serial.println (data[18], BIN);
+    Serial.println ("AD7746 Registers:");
+    Serial.print ("Status (0x0): 0x");
+    if (data[0]<0x10) {Serial.print("0");}
+    Serial.println (data[0], HEX);
+    Serial.print ("Cap Data (0x1-0x3): 0x");
+    if (data[1]<0x10) {Serial.print("0");}
+    Serial.print (data[1], HEX);
+    if (data[2]<0x10) {Serial.print("0");}
+    Serial.print (data[2], HEX);
+    if (data[3]<0x10) {Serial.print("0");}
+    Serial.println (data[3], HEX);
+    Serial.print ("VT Data (0x4-0x6): 0x");
+    if (data[4]<0x10) {Serial.print("0");}
+    Serial.print (data[4], HEX);
+    if (data[5]<0x10) {Serial.print("0");}
+    Serial.print (data[5], HEX);
+    if (data[6]<0x10) {Serial.print("0");}
+    Serial.println (data[6], HEX);
+    Serial.print ("Cap Setup (0x7): 0x");
+    if (data[7]<0x10) {Serial.print("0");}
+    Serial.println (data[7], HEX);
+    Serial.print ("VT Setup (0x8): 0x");
+    if (data[8]<0x10) {Serial.print("0");}
+    Serial.println (data[8], HEX);
+    Serial.print ("EXC Setup (0x9): 0x");
+    if (data[9]<0x10) {Serial.print("0");}
+    Serial.println (data[9], HEX);
+    Serial.print ("Configuration (0xa): 0x");
+    if (data[10]<0x10) {Serial.print("0");}
+    Serial.println (data[10], HEX);
+    Serial.print ("Cap Dac A (0xb): 0x");
+    if (data[11]<0x10) {Serial.print("0");}
+    Serial.println (data[11], HEX);
+    Serial.print ("Cap Dac B (0xc): 0x");
+    if (data[12]<0x10) {Serial.print("0");}
+    Serial.println (data[12], HEX);
+    Serial.print ("Cap Offset (0xd-0xe): 0x");
+    if (data[13]<0x10) {Serial.print("0");}
+    Serial.print (data[13], HEX);
+    if (data[14]<0x10) {Serial.print("0");}
+    Serial.println (data[14], HEX);
+    Serial.print ("Cap Gain (0xf-0x10): 0x");
+    if (data[15]<0x10) {Serial.print("0");}
+    Serial.print (data[15], HEX);
+    if (data[16]<0x10) {Serial.print("0");}
+    Serial.println (data[16], HEX);
+    Serial.print ("Volt Gain (0x11-0x12): 0x");
+    if (data[17]<0x10) {Serial.print("0");}
+    Serial.print (data[17], HEX);
+    if (data[18]<0x10) {Serial.print("0");}
+    Serial.println (data[18], HEX);
 
 }
 
-#endif
+
 
