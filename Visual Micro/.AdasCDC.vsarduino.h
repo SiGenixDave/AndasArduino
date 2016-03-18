@@ -84,9 +84,6 @@ extern "C" void __cxa_pure_virtual() {;}
 //
 void SelectCDC (unsigned char cdc);
 void ReadCapValues (void);
-void SetupTimer2();
-Timer_t ElapsedTime (Timer_t aOldTime);
-void TimeStamp (void);
 void BlinkLED (void);
 void ProcessSerialInput (void);
 boolean ProcessLabviewInput (char *aBuffer);

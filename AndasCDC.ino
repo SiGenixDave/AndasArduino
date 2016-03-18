@@ -58,9 +58,7 @@ const uint16_t WR_BUFFER_SIZE		= 200;
 /*--------------------------------------------------------------------------
  MODULE VARIABLES
  --------------------------------------------------------------------------*/
-
-static Timer_t m_TimerISRCnt;			// Timer tick count
-static volatile uint32_t m_TimerCounter;			// Reported back to UI;
+static volatile uint32_t m_TimerCounter;	// Reported back to UI;
 
 static bool m_Sample;						// when true and m_cycling true, ADC sampling occurs
 static bool m_Blink;						// when true blinking occurs
@@ -80,19 +78,12 @@ void setup()
     char stat = 0;
     char capdac_a = 0;
     
-    // initialize the digital pin as an output.
-    pinMode (PIN_STATUS_LED, OUTPUT);
     // setup serial port to intercept PC commands
     Serial.begin (115200);
 
     while (!Serial) {}
 
     Serial.println ("hello world");
-
-
-    // Initialize timer 2 to fire every millisecond; cant use Timer 1 because it conflicts with the software
-    // serial library that is used to communicate with the display
-    SetupTimer2();
 
     Wire.begin();
 
@@ -129,30 +120,6 @@ void setup()
     
     displayStatus();  // register dump
 
-
-#if 0
-    // set configuration to calib. mode, slow sample
-    writeRegister (0x0A, _BV (7) | _BV (6) | _BV (5) | _BV (4) | _BV (3) | _BV (2) | _BV (0));
-
-    // wait for calibration
-    delay (10);
-
-	displayStatus();
-
-    Serial.print ("Calibrated offset: ");
-    offset = ((unsigned long)readInteger (REGISTER_CAP_OFFSET)) << 8;
-    Serial.println (offset);
-
-#endif
-#if 0
-    writeRegister (REGISTER_CAP_SETUP, _BV (7)); // cap setup reg - cap enabled
-    writeRegister (REGISTER_EXC_SETUP, _BV (3)); // EXC source A
-    writeRegister (REGISTER_CONFIGURATION, _BV (7) | _BV (6) | _BV (5) | _BV (4) | _BV (3) | _BV (0)); // continuous mode
-
-    displayStatus();
-    calibrate();
-#endif
-
     Serial.println ("\ndone");
 }
 
@@ -161,42 +128,8 @@ void setup()
 // the loop routine runs over and over again forever:
 void loop()
 {
-    TimeStamp();
     ProcessSerialInput();
-	///delay(250);
 	ReadCapValues();
-    Serial.print ("\nCAPVALS: ");
-    Serial.print (capValue[0]);
-    Serial.print (", ");
-    Serial.print (capValue[1]);
-    Serial.print (", ");
-    Serial.print (capValue[2]);
-    Serial.print (", ");
-    Serial.println (capValue[3]);
-    delay(1000);    // wait 1 second
-	
-#if 0
-  long value = readValue();
-  Serial.print(offset);
-  Serial.print("/");
-  Serial.print((int)calibration);
-  Serial.print("/");
-  Serial.println(value);
-  if ((value<VALUE_LOWER_BOUND) or (value>VALUE_UPPER_BOUND)) {
-    outOfRangeCount++;
-  }
-  if (outOfRangeCount>MAX_OUT_OF_RANGE_COUNT) {
-    if (value < VALUE_LOWER_BOUND) {
-      calibrate(-CALIBRATION_INCREASE);
-    } 
-    else {
-      calibrate(CALIBRATION_INCREASE);
-    }
-    outOfRangeCount=0;
-  }
-
-  delay(500);
-#endif
 }
 
 void SelectCDC (unsigned char cdc)
@@ -246,92 +179,6 @@ void ReadCapValues (void)
 	
 }
 
-
-////////////////////////////////////////////////////////////////////////
-//
-// Set up Arduino timer2 to fire every 1 msec (downloaded from Web)
-// http://arduinomega.blogspot.com/2011/05/timer2-and-overflow-interrupt-lets-get.html
-//
-////////////////////////////////////////////////////////////////////////
-ISR (TIMER2_OVF_vect)
-{
-    m_TimerISRCnt++;
-    m_TimerCounter++;
-    TCNT2 = 130;           //Reset Timer to 130 out of 255
-    TIFR2 = 0x00;          //Timer2 INT Flag Reg: Clear Timer Overflow Flag
-}
-
-////////////////////////////////////////////////////////////////////////
-//
-// Set up Arduino timer2 to fire every 1 msec (downloaded from Web)
-// http://arduinomega.blogspot.com/2011/05/timer2-and-overflow-interrupt-lets-get.html
-//
-////////////////////////////////////////////////////////////////////////
-void SetupTimer2()
-{
-    //Setup Timer2 to fire every 1ms
-    TCCR2B = 0x00;        //Disable Timer2 while we set it up
-    TCNT2  = 130;         //Reset Timer Count to 130 out of 255
-    TIFR2  = 0x00;        //Timer2 INT Flag Reg: Clear Timer Overflow Flag
-    TIMSK2 = 0x01;        //Timer2 INT Reg: Timer2 Overflow Interrupt Enable
-    TCCR2A = 0x00;        //Timer2 Control Reg A: Wave Gen Mode normal
-    TCCR2B = 0x05;        //Timer2 Control Reg B: Timer Prescaler set to 128
-}
-
-////////////////////////////////////////////////////////////////////////
-//
-// Used for timing (no need to call "delay" to pause all processing)
-//
-////////////////////////////////////////////////////////////////////////
-Timer_t ElapsedTime (Timer_t aOldTime)
-{
-    Timer_t calcTime, currentTicks;
-
-    currentTicks = m_TimerISRCnt;
-
-    if (aOldTime > currentTicks) /* clock rolled over  */
-    {
-        /*------------------------------------------------------------------
-         ; If the clock has rolled over, the time elapsed is calculated by the
-         ; following formula.  The 1 extra addition is for the tick when the
-         ; clock rolls from maximum to 0.  If the +1 was not added, the expired
-         ; time would be off by 1 tick at rollovers.
-         ------------------------------------------------------------------*/
-        calcTime = (MAX_TIMER_VALUE - aOldTime) + currentTicks + 1;
-    }
-    else /* clock has not rolled over       */
-    {
-        calcTime = currentTicks - aOldTime;
-    }
-    return (calcTime);
-}
-
-
-////////////////////////////////////////////////////////////////////////
-//
-// Used to create a timestamp for all collected data and perform timing
-// operations
-//
-////////////////////////////////////////////////////////////////////////
-void TimeStamp (void)
-{
-    static Timer_t ledTimer = 0;
-    static Timer_t sampleTimer = 0;
-
-    if (ElapsedTime (ledTimer) >= 500)
-    {
-        m_Blink = true;
-        BlinkLED();
-        ledTimer = ElapsedTime (0);
-    }
-
-    if (ElapsedTime (sampleTimer) >= m_SampleTimeMsecs)
-    {
-        m_Sample = true;
-        sampleTimer = ElapsedTime (0);
-    }
-
-}
 
 ////////////////////////////////////////////////////////////////////////
 //
