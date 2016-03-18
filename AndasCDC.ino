@@ -2,7 +2,6 @@
  INCLUDE FILES
  --------------------------------------------------------------------------*/
 #include <stdio.h>
-#include "MyTypes.h"
 #include <Wire.h>
 
 /*--------------------------------------------------------------------------
@@ -67,7 +66,7 @@ static uint16_t m_SampleTimeMsecs = 50;		// default sample time; can be changed 
 byte calibration;
 byte outOfRangeCount = 0;
 unsigned long offset = 0;
-uint32_t capValue[4];
+int32_t capValue[4];
 /*--------------------------------------------------------------------------
  MODULE PROTOTYPES
  --------------------------------------------------------------------------*/
@@ -102,7 +101,7 @@ void setup()
     writeRegister (REGISTER_CAP_SETUP, 0x80); // cap setup reg - cap enabled
     writeRegister (REGISTER_CONFIGURATION, 0x20); // configuration register - 62ms update rate
     // **TRS 3-17 write to CAPDAC register using formula from sheet 3 of app note CN-1029
-    writeRegister (REGISTER_CAP_DAC_A, 0x51); // CAPDAC_A - TEST    
+    writeRegister (REGISTER_CAP_DAC_A, 0xE2); // CAPDAC_A - 30 pF 
 
     // Set Switch to connect the I2C bus to CDC 1
     SelectCDC(CDC_1);
@@ -268,6 +267,7 @@ boolean ProcessLabviewInput (char *aBuffer)
     {
         case 's':
         case 'S':
+			BlinkLED();
             idCount = PopulateIds (numericString);
             // idCount will be 0 if "<s>" is sent from labview so
             // Populate m_Id[] so all 4 channels are sent back to labview
@@ -579,7 +579,17 @@ long readValue()
     unsigned long value =  readLong (REGISTER_CAP_DATA);
 
     value >>= 8;
-    //we have read one byte to much, now we have to get rid of it
+
+	// Invert the upper bit to get a 2's comp reading
+	value = value ^ 0x800000;
+
+	// Sign extend the upper 8 bits
+	if (value & 0x800000)
+	{
+		value |= 0xFF000000;
+	}
+
+    // we have read one byte to much, now we have to get rid of it
     ret =  value;
 
     return ret;
